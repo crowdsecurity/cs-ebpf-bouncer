@@ -1,6 +1,6 @@
 module github.com/sabban/cs-ebpf-bouncer
 
-go 1.24.3
+go 1.24.1
 
 toolchain go1.24.4
 
@@ -11,9 +11,10 @@ require (
 	github.com/crowdsecurity/go-cs-lib v0.0.20
 	github.com/prometheus/client_golang v1.22.0
 	github.com/prometheus/client_model v0.6.2
-	github.com/sabban/cs-ebpf-bouncer/pkg/cfg v0.0.0-20250609201521-ec4bf4db067b
 	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/sync v0.15.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
+	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
@@ -51,8 +52,6 @@ require (
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
