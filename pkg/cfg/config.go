@@ -10,8 +10,9 @@ import (
 )
 
 type BouncerConfig struct {
-	Interface string        `yaml:"interface"`
-	Logging   LoggingConfig `yaml:",inline"`
+	Interface      string        `yaml:"interface"`
+	MetricsEnabled bool          `yaml:"metrics"`
+	Logging        LoggingConfig `yaml:",inline"`
 }
 
 // MergedConfig() returns the byte content of the patched configuration file (with .yaml.local).

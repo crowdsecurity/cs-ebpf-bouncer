@@ -115,7 +115,7 @@ func Execute() error {
 		os.Exit(1)
 	}
 
-	_, blacklist, cleanup, err := xdp.LoadXDP(config.Interface)
+	_, blacklist, cleanup, err := xdp.LoadXDP(config.Interface, config.MetricsEnabled)
 	if err != nil {
 		return fmt.Errorf("failed to load XDP: %w", err)
 	}
