@@ -170,7 +170,11 @@ func Execute() error {
 						}
 						log.Debugf("Blocking IP %s with reason %s", *decision.Value, *decision.Origin)
 						originId := origin.Add(*decision.Origin)
-						xdp.BlockIP(blacklist, *decision.Value, originId)
+						//						xdp.BlockIP(blacklist, *decision.Value, originId)
+						xdp.RegisterOrigin(originId, *decision.Origin)
+						if err := xdp.BlockIP(blacklist, *decision.Value, originId); err != nil {
+							log.Errorf("failed to block IP %s: %v", *decision.Value, err)
+						}
 					}
 				}
 			}

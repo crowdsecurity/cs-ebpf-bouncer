@@ -14,6 +14,8 @@ import (
 	//	log "github.com/sirupsen/logrus"
 )
 
+var originName = make(map[uint32]string)
+
 // LoadXDP loads the embedded eBPF object, attaches it to ifaceName,
 // and returns (link handle, blacklist map, cleanup fn).
 func LoadXDP(ifaceName string, stats bool) (lk link.Link, blacklist *ebpf.Map, cleanup func() error, err error) {
@@ -139,7 +141,7 @@ func CollectAndReset(ipStats *ebpf.Map,
 		}
 
 		// reset this counter for *all* CPUs with one Update
-		if err := ipStats.Update(key, zero, ebpf.UpdateExisting); err != nil {
+		if err := ipStats.Update(key, zero, ebpf.UpdateExist); err != nil {
 			return delta, curr, fmt.Errorf("reset key %d: %w", key, err)
 		}
 	}
