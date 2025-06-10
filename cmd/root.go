@@ -11,12 +11,15 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/crowdsecurity/crowdsec/pkg/models"
+
 	csbouncer "github.com/crowdsecurity/go-cs-bouncer"
 	"github.com/crowdsecurity/go-cs-lib/csdaemon"
 	"github.com/crowdsecurity/go-cs-lib/csstring"
 	"github.com/crowdsecurity/go-cs-lib/version"
 
 	"github.com/sabban/cs-ebpf-bouncer/pkg/cfg"
+	"github.com/sabban/cs-ebpf-bouncer/pkg/metrics"
 	"github.com/sabban/cs-ebpf-bouncer/pkg/xdp"
 
 	log "github.com/sirupsen/logrus"
@@ -115,15 +118,15 @@ func Execute() error {
 		os.Exit(1)
 	}
 
-	_, blacklist, cleanup, err := xdp.LoadXDP(config.Interface, config.MetricsEnabled)
+	_, blacklist, ipstats, cleanup, err := xdp.LoadXDP(config.Interface, config.MetricsEnabled)
 	if err != nil {
 		return fmt.Errorf("failed to load XDP: %w", err)
 	}
 
 	defer cleanup()
-	origin := NewOrigin()
+	xdp.Origin = xdp.NewOrigin()
 
-	metricsProvider, err := csbouncer.NewMetricsProvider(bouncer.APIClient, bouncerType, mHandler.MetricsUpdater, log.StandardLogger())
+	metricsProvider, err := csbouncer.NewMetricsProvider(bouncer.APIClient, bouncerType, metrics.MetricsUpdater, log.StandardLogger())
 	if err != nil {
 		return fmt.Errorf("unable to create metrics provider: %w", err)
 	}
@@ -134,7 +137,7 @@ func Execute() error {
 
 	g.Go(func() error {
 		log.Infof("Processing new and deleted decisions . . .")
-
+		decisions := map[string][]*models.DecisionsStreamResponse // for metrics
 		for {
 			select {
 			case <-ctx.Done():
@@ -165,13 +168,18 @@ func Execute() error {
 					}
 					if *decision.Scope == "Ip" {
 
-						if isIPv6(*decision.Value) {
+						if isIPv6(*decision.Value) { // Skip IPv6 for now
 							continue
 						}
 						log.Debugf("Blocking IP %s with reason %s", *decision.Value, *decision.Origin)
-						originId := origin.Add(*decision.Origin)
-						//						xdp.BlockIP(blacklist, *decision.Value, originId)
-						xdp.RegisterOrigin(originId, *decision.Origin)
+						origin := ""
+						if *decision.Origin == "lists" {
+							origin = fmt.Sprintf("list:%s", decision.Scenario)
+						} else {
+							origin = *decision.Origin
+						}
+						originId := xdp.Origin.Add(origin)
+
 						if err := xdp.BlockIP(blacklist, *decision.Value, originId); err != nil {
 							log.Errorf("failed to block IP %s: %v", *decision.Value, err)
 						}
@@ -197,4 +205,13 @@ func Execute() error {
 func isIPv6(str string) bool {
 	ip := net.ParseIP(str)
 	return ip != nil && strings.Contains(str, ":")
+}
+
+func remove[T comparable](l []T, item T) []T {
+	for i, other := range l {
+		if other == item {
+			return append(l[:i], l[i+1:]...)
+		}
+	}
+	return l
 }

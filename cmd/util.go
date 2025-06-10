@@ -37,3 +37,7 @@ func (o *Origin) GetFromValue(value uint32) string {
 	}
 	return ""
 }
+
+func (o *Origin) Len() int {
+	return len(o.m)
+}

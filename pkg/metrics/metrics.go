@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"net/http"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -11,6 +10,7 @@ import (
 	"github.com/crowdsecurity/go-cs-lib/ptr"
 
 	"github.com/crowdsecurity/crowdsec/pkg/models"
+	"github.com/sabban/cs-ebpf-bouncer/pkg/xdp"
 )
 
 const CollectionInterval = time.Second * 10
@@ -95,8 +95,7 @@ func getLabelValue(labels []*io_prometheus_client.LabelPair, key string) string 
 func MetricsUpdater(met *models.RemediationComponentsMetrics, updateInterval time.Duration) {
 	log.Debugf("Updating metrics")
 
-	m.Backend.CollectMetrics()
-
+	xdp.CollectMetrics()
 	// Most of the common fields are set automatically by the metrics provider
 	// We only need to care about the metrics themselves
 
@@ -161,4 +160,58 @@ func MetricsUpdater(met *models.RemediationComponentsMetrics, updateInterval tim
 			})
 		}
 	}
+}
+
+type StatsDelta struct {
+	Processed uint64
+	DroppedBy map[string]uint64
+}
+
+func CollectAndReset(prev map[uint32]float64) (StatsDelta, map[uint32]uint64, error) {
+
+	delta := StatsDelta{DroppedBy: make(map[string]uint64)}
+	curr := make(map[uint32]uint64)          // snapshot we return for next call
+	zero := make([]uint64, runtime.NumCPU()) // []uint64{0,0,…} to reset
+
+	it := ipStats.Iterate()
+	var (
+		key uint32
+		val []uint64 // one entry per CPU
+	)
+	for it.Next(&key, &val) {
+		var total uint64
+		for _, c := range val {
+			total += c
+		}
+
+		curr[key] = total
+
+		// compute interval delta
+		prevVal := uint64(prev[key])
+		if total < prevVal {
+			// counter wrapped? shouldn't happen for u64 but guard anyway
+			prevVal = 0
+		}
+		diff := total - prevVal
+
+		switch key {
+		case 0:
+			delta.Processed = diff
+		default:
+			name := originName[key]
+			if name == "" {
+				name = fmt.Sprintf("origin_%d", key)
+			}
+			delta.DroppedBy[name] += diff
+		}
+
+		// reset this counter for *all* CPUs with one Update
+		if err := ipStats.Update(key, zero, ebpf.UpdateExist); err != nil {
+			return delta, curr, fmt.Errorf("reset key %d: %w", key, err)
+		}
+	}
+	if err := it.Err(); err != nil {
+		return delta, curr, err
+	}
+	return delta, curr, nil
 }
