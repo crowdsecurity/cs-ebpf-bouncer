@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"runtime"
 	"syscall"
 
 	"github.com/cilium/ebpf"
@@ -106,7 +107,8 @@ func IsBlocked(m *ebpf.Map, ip string) (bool, error) {
 }
 
 func GetStatsByOrigin(origin uint32) (float64, error) {
-	var vals []uint64
+	numCPU := runtime.NumCPU()
+	vals := make([]uint64, numCPU)
 	if err := ipStats.Lookup(origin, &vals); err != nil {
 		if errors.Is(err, syscall.ENOENT) {
 			return 0, nil // origin not found
