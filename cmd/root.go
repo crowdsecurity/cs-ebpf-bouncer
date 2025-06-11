@@ -11,8 +11,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/crowdsecurity/crowdsec/pkg/models"
-
 	csbouncer "github.com/crowdsecurity/go-cs-bouncer"
 	"github.com/crowdsecurity/go-cs-lib/csdaemon"
 	"github.com/crowdsecurity/go-cs-lib/csstring"
@@ -118,7 +116,7 @@ func Execute() error {
 		os.Exit(1)
 	}
 
-	_, blacklist, ipstats, cleanup, err := xdp.LoadXDP(config.Interface, config.MetricsEnabled)
+	_, cleanup, err := xdp.LoadXDP(config.Interface, config.MetricsEnabled)
 	if err != nil {
 		return fmt.Errorf("failed to load XDP: %w", err)
 	}
@@ -137,7 +135,6 @@ func Execute() error {
 
 	g.Go(func() error {
 		log.Infof("Processing new and deleted decisions . . .")
-		decisions := map[string][]*models.DecisionsStreamResponse // for metrics
 		for {
 			select {
 			case <-ctx.Done():
@@ -158,7 +155,7 @@ func Execute() error {
 							continue
 						}
 						log.Debugf("Unblocking IP %s with reason %s", *decision.Value, *decision.Origin)
-						xdp.UnblockIP(blacklist, *decision.Value)
+						xdp.UnblockIP(*decision.Value)
 					}
 				}
 				for _, decision := range decisions.New {
@@ -180,7 +177,7 @@ func Execute() error {
 						}
 						originId := xdp.Origin.Add(origin)
 
-						if err := xdp.BlockIP(blacklist, *decision.Value, originId); err != nil {
+						if err := xdp.BlockIP(*decision.Value, originId); err != nil {
 							log.Errorf("failed to block IP %s: %v", *decision.Value, err)
 						}
 					}

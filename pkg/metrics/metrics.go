@@ -95,7 +95,7 @@ func getLabelValue(labels []*io_prometheus_client.LabelPair, key string) string 
 func MetricsUpdater(met *models.RemediationComponentsMetrics, updateInterval time.Duration) {
 	log.Debugf("Updating metrics")
 
-	xdp.CollectMetrics()
+	CollectMetrics()
 	// Most of the common fields are set automatically by the metrics provider
 	// We only need to care about the metrics themselves
 
@@ -162,56 +162,46 @@ func MetricsUpdater(met *models.RemediationComponentsMetrics, updateInterval tim
 	}
 }
 
-type StatsDelta struct {
-	Processed uint64
-	DroppedBy map[string]uint64
-}
+func CollectMetrics() {
+	//origin 0 is always "processed"
+	processed, err := xdp.GetStatsByOrigin(0)
+	if err != nil {
+		log.Errorf("error while getting stats by origin: %v", err)
+		Map[ProcessedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv4"}).Set(0)
+	}
 
-func CollectAndReset(prev map[uint32]float64) (StatsDelta, map[uint32]uint64, error) {
+	Map[ProcessedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv4"}).Set(processed)
 
-	delta := StatsDelta{DroppedBy: make(map[string]uint64)}
-	curr := make(map[uint32]uint64)          // snapshot we return for next call
-	zero := make([]uint64, runtime.NumCPU()) // []uint64{0,0,…} to reset
+	for originId := range xdp.Origin.Len() {
+		stats, err := xdp.GetStatsByOrigin(uint32(originId))
+		if err != nil {
+			log.Errorf("error while getting stats by origin %d: %v", originId, err)
+			continue
+		}
 
-	it := ipStats.Iterate()
+		originString := xdp.Origin.GetFromValue(uint32(originId))
+
+		Map[DroppedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv4", "origin": originString}).Set(float64(stats))
+	}
+
+	iter := xdp.BlacklistIterator()
 	var (
-		key uint32
-		val []uint64 // one entry per CPU
+		key       uint32
+		value     uint32
+		bannedIPs map[string]int = make(map[string]int)
 	)
-	for it.Next(&key, &val) {
-		var total uint64
-		for _, c := range val {
-			total += c
-		}
 
-		curr[key] = total
+	for iter.Next(&key, &value) { // iterate over the blacklist map is expensive
+		OriginString := xdp.Origin.GetFromValue(value)
 
-		// compute interval delta
-		prevVal := uint64(prev[key])
-		if total < prevVal {
-			// counter wrapped? shouldn't happen for u64 but guard anyway
-			prevVal = 0
-		}
-		diff := total - prevVal
-
-		switch key {
-		case 0:
-			delta.Processed = diff
-		default:
-			name := originName[key]
-			if name == "" {
-				name = fmt.Sprintf("origin_%d", key)
-			}
-			delta.DroppedBy[name] += diff
-		}
-
-		// reset this counter for *all* CPUs with one Update
-		if err := ipStats.Update(key, zero, ebpf.UpdateExist); err != nil {
-			return delta, curr, fmt.Errorf("reset key %d: %w", key, err)
+		if _, ok := bannedIPs[OriginString]; !ok {
+			bannedIPs[OriginString] = 1
+		} else {
+			bannedIPs[OriginString]++
 		}
 	}
-	if err := it.Err(); err != nil {
-		return delta, curr, err
+
+	for origin, count := range bannedIPs {
+		Map[ActiveBannedIPs].Gauge.With(prometheus.Labels{"ip_type": "ipv4", "origin": origin}).Set(float64(count))
 	}
-	return delta, curr, nil
 }

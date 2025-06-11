@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"runtime"
 	"syscall"
 
 	"github.com/cilium/ebpf"
@@ -17,11 +16,12 @@ import (
 var (
 	originName = make(map[uint32]string)
 	ipStats    *ebpf.Map
+	blacklist  *ebpf.Map
 )
 
 // LoadXDP loads the embedded eBPF object, attaches it to ifaceName,
 // and returns (link handle, blacklist map, cleanup fn).
-func LoadXDP(ifaceName string, stats bool) (lk link.Link, blacklist *ebpf.Map, ipstats *ebpf.Map, cleanup func() error, err error) {
+func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, err error) {
 	// Allow BPF maps > RLIMIT_MEMLOCK on older kernels :contentReference[oaicite:1]{index=1}
 	if err = rlimit.RemoveMemlock(); err != nil {
 		err = fmt.Errorf("rlimit: %w", err)
@@ -32,14 +32,14 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, blacklist *ebpf.Map, i
 	var objs xdpObjects
 	if err = loadXdpObjects(&objs, nil); err != nil {
 		err = fmt.Errorf("load objects: %w", err)
-		return nil, nil, nil, nil, fmt.Errorf("load objects: %w", err)
+		return nil, nil, fmt.Errorf("load objects: %w", err)
 	}
 
 	// 2. Resolve interface index.
 	iface, err := net.InterfaceByName(ifaceName)
 	if err != nil {
 		objs.Close()
-		return nil, nil, nil, nil, fmt.Errorf("resolve interface: %w", err)
+		return nil, nil, fmt.Errorf("resolve interface: %w", err)
 	}
 
 	// 3. Attach XDP program.
@@ -49,16 +49,16 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, blacklist *ebpf.Map, i
 	})
 	if err != nil {
 		objs.Close()
-		return nil, nil, nil, nil, fmt.Errorf("attach XDP: %w", err)
+		return nil, nil, fmt.Errorf("attach XDP: %w", err)
 	}
 
 	blacklist = objs.IpBlacklist
-	ipstats = objs.IpStats
+	ipStats = objs.IpStats
 	cleanup = func() error {
 		lk.Close()          // detaches
 		return objs.Close() // unpins maps/programs
 	}
-	return lk, blacklist, ipstats, cleanup, nil
+	return lk, cleanup, nil
 }
 
 func ipv4Key(addr string) (uint32, error) {
@@ -69,21 +69,26 @@ func ipv4Key(addr string) (uint32, error) {
 	return binary.BigEndian.Uint32(ip), nil
 }
 
-func BlockIP(m *ebpf.Map, ip string, origin uint32) error {
+func BlockIP(ip string, origin uint32) error {
 	k, err := ipv4Key(ip)
 	if err != nil {
 		return err
 	}
-	return m.Update(k, origin, ebpf.UpdateAny)
+	return blacklist.Update(k, origin, ebpf.UpdateAny)
 }
 
 // UnblockIP removes an address.
-func UnblockIP(m *ebpf.Map, ip string) error {
+func UnblockIP(ip string) error {
 	k, err := ipv4Key(ip)
 	if err != nil {
 		return err
 	}
-	return m.Delete(k)
+	return blacklist.Delete(k)
+}
+
+func BlacklistIterator() *ebpf.MapIterator {
+	// Create an iterator for the blacklist map.
+	return blacklist.Iterate()
 }
 
 // IsBlocked checks membership.
@@ -100,13 +105,18 @@ func IsBlocked(m *ebpf.Map, ip string) (bool, error) {
 	return err == nil, err
 }
 
-func GetStatsByOrigin(m *ebpf.Map, origin uint32) (float64, error) {
-	var val uint64
-	if err := m.Lookup(origin, &val); err != nil {
+func GetStatsByOrigin(origin uint32) (float64, error) {
+	var vals []uint64
+	if err := ipStats.Lookup(origin, &vals); err != nil {
 		if errors.Is(err, syscall.ENOENT) {
 			return 0, nil // origin not found
 		}
 		return 0, fmt.Errorf("lookup origin %d: %w", origin, err)
 	}
-	return float64(val), nil
+
+	var total uint64
+	for _, v := range vals {
+		total += v
+	}
+	return float64(total), nil
 }
