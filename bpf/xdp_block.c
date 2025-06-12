@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-3.0-only */
 
 #include <linux/bpf.h>
 #include <linux/if_ether.h>
