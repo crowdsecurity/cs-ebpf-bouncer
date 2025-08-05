@@ -5,7 +5,7 @@ package main
 import (
 	log "github.com/sirupsen/logrus"
 
-	"github.com/sabban/cs-ebpf-bouncer/cmd"
+	"github.com/crowdsecurity/cs-ebpf-bouncer/cmd"
 )
 
 func main() {

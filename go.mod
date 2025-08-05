@@ -1,4 +1,4 @@
-module github.com/sabban/cs-ebpf-bouncer
+module github.com/crowdsecurity/cs-ebpf-bouncer
 
 go 1.24.1
 

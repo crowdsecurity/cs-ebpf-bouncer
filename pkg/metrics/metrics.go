@@ -10,7 +10,7 @@ import (
 	"github.com/crowdsecurity/go-cs-lib/ptr"
 
 	"github.com/crowdsecurity/crowdsec/pkg/models"
-	"github.com/sabban/cs-ebpf-bouncer/pkg/xdp"
+	"github.com/crowdsecurity/cs-ebpf-bouncer/pkg/xdp"
 )
 
 const CollectionInterval = time.Second * 10

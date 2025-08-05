@@ -18,9 +18,9 @@ import (
 	"github.com/crowdsecurity/go-cs-lib/csstring"
 	"github.com/crowdsecurity/go-cs-lib/version"
 
-	"github.com/sabban/cs-ebpf-bouncer/pkg/cfg"
-	"github.com/sabban/cs-ebpf-bouncer/pkg/metrics"
-	"github.com/sabban/cs-ebpf-bouncer/pkg/xdp"
+	"github.com/crowdsecurity/cs-ebpf-bouncer/pkg/cfg"
+	"github.com/crowdsecurity/cs-ebpf-bouncer/pkg/metrics"
+	"github.com/crowdsecurity/cs-ebpf-bouncer/pkg/xdp"
 
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
