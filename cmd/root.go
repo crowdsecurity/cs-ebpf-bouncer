@@ -173,7 +173,7 @@ func Execute() error {
 						log.Debugf("Blocking IP %s with reason %s", *decision.Value, *decision.Origin)
 						origin := ""
 						if *decision.Origin == "lists" {
-							origin = fmt.Sprintf("list:%s", decision.Scenario)
+							origin = fmt.Sprintf("list:%s", *decision.Scenario)
 						} else {
 							origin = *decision.Origin
 						}
