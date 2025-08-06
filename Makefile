@@ -60,12 +60,17 @@ clean: clean-release-dir clean-debian clean-rpm
 # Build binaries
 #
 
+.PHONY: generate
+generate:
+	@echo "Generating code..."
+	$(GO) generate ./...
+
 .PHONY: binary
 binary:
 	$(GOBUILD) $(LD_OPTS) -o $(BINARY_NAME)
 
 .PHONY: build
-build: clean binary
+build: clean generate binary
 
 #
 # Unit and integration tests
