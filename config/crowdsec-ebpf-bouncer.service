@@ -1,0 +1,15 @@
+[Unit]
+Description=The ebpf bouncer for CrowdSec
+After=syslog.target network.target remote-fs.target nss-lookup.target crowdsec.service
+
+[Service]
+Type=notify
+ExecStart=${BIN} -c ${CFG}/crowdsec-ebpf-bouncer.yaml
+ExecStartPost=/bin/sleep 0.1
+Restart=always
+RestartSec=10
+# don't send a termination signal to the children processes,
+# because the iptables backend needs to run ipset multiple times to properly shutdown
+
+[Install]
+WantedBy=multi-user.target

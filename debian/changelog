@@ -1,0 +1,5 @@
+crowdsec-ebpf-bouncer (0.0.1) UNRELEASED; urgency=medium
+
+  * debian package
+
+ -- Manuel Sabban <manuel@crowdsec.net>  Wed, 06 Aug 2025 09:38:06 +0100

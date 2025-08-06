@@ -1,0 +1,10 @@
+Source: crowdsec-ebpf-bouncer
+Maintainer: Crowdsec Team <debian@crowdsec.net>
+Build-Depends: debhelper, linux-headers-generic
+Section: admin
+Priority: optional
+
+Package: crowdsec-ebpf-bouncer
+Provides: crowdsec-ebpf-bouncer
+Description: Ebpf bouncer for Crowdsec
+Architecture: any
