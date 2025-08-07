@@ -63,7 +63,7 @@ clean: clean-release-dir clean-debian clean-rpm
 .PHONY: generate
 generate:
 	@echo "Generating code..."
-	$(GO) generate ./...
+	GOARCH=$(shell go env GOHOSTARCH) GOOS=$(shell go env GOHOSTOS) $(GO) generate ./...
 
 .PHONY: binary
 binary:
