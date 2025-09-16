@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"runtime"
 	"syscall"
 
 	"github.com/cilium/ebpf"
