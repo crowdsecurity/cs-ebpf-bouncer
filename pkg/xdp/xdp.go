@@ -123,8 +123,12 @@ func IsBlocked(m *ebpf.Map, ip string) (bool, error) {
 }
 
 func GetStatsByOrigin(origin uint32) (float64, error) {
-	numCPU := runtime.NumCPU()
-	vals := make([]uint64, numCPU)
+	ncpu, err := ebpf.PossibleCPU()
+	if err != nil {
+		return 0, fmt.Errorf("get possible CPUs: %w", err)
+	}
+
+	vals := make([]uint32, ncpu)
 	if err := ipStats.Lookup(origin, &vals); err != nil {
 		if errors.Is(err, syscall.ENOENT) {
 			return 0, nil // origin not found
@@ -134,7 +138,7 @@ func GetStatsByOrigin(origin uint32) (float64, error) {
 
 	var total uint64
 	for _, v := range vals {
-		total += v
+		total += uint64(v)
 	}
 	return float64(total), nil
 }
