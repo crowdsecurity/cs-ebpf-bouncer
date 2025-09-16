@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"runtime"
 	"syscall"
 
@@ -17,9 +18,8 @@ import (
 )
 
 var (
-	originName = make(map[uint32]string)
-	ipStats    *ebpf.Map
-	blacklist  *ebpf.Map
+	ipStats   *ebpf.Map
+	blacklist *ebpf.Map
 )
 
 // LoadXDP loads the embedded eBPF object, attaches it to ifaceName,
@@ -64,16 +64,30 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, 
 	return lk, cleanup, nil
 }
 
-func ipv4Key(addr string) (uint32, error) {
-	ip := net.ParseIP(addr).To4()
-	if ip == nil {
-		return 0, fmt.Errorf("invalid IPv4: %q", addr)
+// For IPv4: returns 4-byte key as uint32.
+// For IPv6: returns 16-byte key as [16]byte.
+func ipKey(addr string) (any, error) {
+	ip, err := netip.ParseAddr(addr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid IP %q: %w", addr, err)
 	}
-	return binary.BigEndian.Uint32(ip), nil
+
+	if ip.Is4() {
+		return binary.BigEndian.Uint32(ip.AsSlice()), nil
+	}
+
+	// not used for now
+	if ip.Is6() {
+		var key [16]byte
+		copy(key[:], ip.AsSlice())
+		return key, nil
+	}
+
+	return nil, fmt.Errorf("unsupported IP format: %q", addr)
 }
 
 func BlockIP(ip string, origin uint32) error {
-	k, err := ipv4Key(ip)
+	k, err := ipKey(ip)
 	if err != nil {
 		return err
 	}
@@ -82,7 +96,7 @@ func BlockIP(ip string, origin uint32) error {
 
 // UnblockIP removes an address.
 func UnblockIP(ip string) error {
-	k, err := ipv4Key(ip)
+	k, err := ipKey(ip)
 	if err != nil {
 		return err
 	}
@@ -96,7 +110,7 @@ func BlacklistIterator() *ebpf.MapIterator {
 
 // IsBlocked checks membership.
 func IsBlocked(m *ebpf.Map, ip string) (bool, error) {
-	k, err := ipv4Key(ip)
+	k, err := ipKey(ip)
 	if err != nil {
 		return false, err
 	}

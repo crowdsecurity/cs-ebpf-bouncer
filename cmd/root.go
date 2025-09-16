@@ -7,7 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net"
+	"net/netip"
 	"os"
 	"os/signal"
 	"strings"
@@ -202,15 +202,9 @@ func Execute() error {
 }
 
 func isIPv6(str string) bool {
-	ip := net.ParseIP(str)
-	return ip != nil && strings.Contains(str, ":")
-}
-
-func remove[T comparable](l []T, item T) []T {
-	for i, other := range l {
-		if other == item {
-			return append(l[:i], l[i+1:]...)
-		}
+	ip, err := netip.ParseAddr(str)
+	if err != nil {
+		return false
 	}
-	return l
+	return ip.Is6()
 }
