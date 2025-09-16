@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/netip"
 	"syscall"
@@ -56,6 +57,11 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, 
 
 	blacklist = objs.IpBlacklist
 	ipStats = objs.IpStats
+
+	info, _ := ipStats.Info()
+	log.Printf("ip_stats: type=%v valueSize=%d maxEntries=%d\n",
+		info.Type, info.ValueSize, info.MaxEntries)
+
 	cleanup = func() error {
 		lk.Close()          // detaches
 		return objs.Close() // unpins maps/programs
