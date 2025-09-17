@@ -8,13 +8,12 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
-	"runtime"
 	"syscall"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
-	//	log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -57,6 +56,11 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, 
 
 	blacklist = objs.IpBlacklist
 	ipStats = objs.IpStats
+
+	info, _ := ipStats.Info()
+	log.Infof("ip_stats: type=%v valueSize=%d maxEntries=%d\n",
+		info.Type, info.ValueSize, info.MaxEntries)
+
 	cleanup = func() error {
 		lk.Close()          // detaches
 		return objs.Close() // unpins maps/programs
@@ -123,8 +127,12 @@ func IsBlocked(m *ebpf.Map, ip string) (bool, error) {
 }
 
 func GetStatsByOrigin(origin uint32) (float64, error) {
-	numCPU := runtime.NumCPU()
-	vals := make([]uint64, numCPU)
+	ncpu, err := ebpf.PossibleCPU()
+	if err != nil {
+		return 0, fmt.Errorf("get possible CPUs: %w", err)
+	}
+
+	vals := make([]uint64, ncpu)
 	if err := ipStats.Lookup(origin, &vals); err != nil {
 		if errors.Is(err, syscall.ENOENT) {
 			return 0, nil // origin not found

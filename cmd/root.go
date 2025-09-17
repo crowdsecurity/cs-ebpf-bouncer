@@ -131,6 +131,8 @@ func Execute() error {
 		return fmt.Errorf("unable to create metrics provider: %w", err)
 	}
 
+	metrics.Map.MustRegisterAll()
+
 	g.Go(func() error {
 		return metricsProvider.Run(ctx)
 	})

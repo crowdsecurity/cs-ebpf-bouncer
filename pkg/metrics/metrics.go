@@ -18,11 +18,11 @@ const CollectionInterval = time.Second * 10
 type metricName string
 
 const (
-	DroppedPackets   metricName = "fw_bouncer_dropped_packets"
-	DroppedBytes     metricName = "fw_bouncer_dropped_bytes"
-	ProcessedPackets metricName = "fw_bouncer_processed_packets"
-	ProcessedBytes   metricName = "fw_bouncer_processed_bytes"
-	ActiveBannedIPs  metricName = "fw_bouncer_banned_ips"
+	DroppedPackets   metricName = "ebpf_bouncer_dropped_packets"
+	DroppedBytes     metricName = "ebpf_bouncer_dropped_bytes"
+	ProcessedPackets metricName = "ebpf_bouncer_processed_packets"
+	ProcessedBytes   metricName = "ebpf_bouncer_processed_bytes"
+	ActiveBannedIPs  metricName = "ebpf_bouncer_banned_ips"
 )
 
 type metricConfig struct {
@@ -165,6 +165,7 @@ func MetricsUpdater(met *models.RemediationComponentsMetrics, updateInterval tim
 func CollectMetrics() {
 	//origin 0 is always "processed"
 	processed, err := xdp.GetStatsByOrigin(0)
+	log.Debugf("Getting processed packets: %f", processed)
 	if err != nil {
 		log.Errorf("error while getting stats by origin: %v", err)
 		Map[ProcessedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv4"}).Set(0)
@@ -178,8 +179,10 @@ func CollectMetrics() {
 			log.Errorf("error while getting stats by origin %d: %v", originId, err)
 			continue
 		}
+		log.Debugf("Getting dropped packets: %f for origin %d", stats, originId)
 
 		originString := xdp.Origin.GetFromValue(uint32(originId))
+		log.Debugf("Getting dropped packets: %f for origin %s", stats, originString)
 
 		Map[DroppedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv4", "origin": originString}).Set(float64(stats))
 	}
@@ -203,5 +206,6 @@ func CollectMetrics() {
 
 	for origin, count := range bannedIPs {
 		Map[ActiveBannedIPs].Gauge.With(prometheus.Labels{"ip_type": "ipv4", "origin": origin}).Set(float64(count))
+		log.Debugf("Getting dropped packets: %d for origin %s", count, origin)
 	}
 }
