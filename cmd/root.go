@@ -135,6 +135,8 @@ func Execute() error {
 		return metricsProvider.Run(ctx)
 	})
 
+	metrics.Map.MustRegisterAll()
+
 	g.Go(func() error {
 		log.Infof("Processing new and deleted decisions . . .")
 		for {

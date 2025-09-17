@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/netip"
 	"syscall"
@@ -14,7 +13,7 @@ import (
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/rlimit"
-	//	log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 var (
@@ -59,7 +58,7 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, 
 	ipStats = objs.IpStats
 
 	info, _ := ipStats.Info()
-	log.Printf("ip_stats: type=%v valueSize=%d maxEntries=%d\n",
+	log.Infof("ip_stats: type=%v valueSize=%d maxEntries=%d\n",
 		info.Type, info.ValueSize, info.MaxEntries)
 
 	cleanup = func() error {
