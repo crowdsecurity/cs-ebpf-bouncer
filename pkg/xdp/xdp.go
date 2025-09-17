@@ -133,7 +133,7 @@ func GetStatsByOrigin(origin uint32) (float64, error) {
 		return 0, fmt.Errorf("get possible CPUs: %w", err)
 	}
 
-	vals := make([]uint64, ncpu)
+	vals := make([]uint32, ncpu)
 	if err := ipStats.Lookup(origin, &vals); err != nil {
 		if errors.Is(err, syscall.ENOENT) {
 			return 0, nil // origin not found
@@ -143,7 +143,7 @@ func GetStatsByOrigin(origin uint32) (float64, error) {
 
 	var total uint64
 	for _, v := range vals {
-		total += v
+		total += uint64(v)
 	}
 	return float64(total), nil
 }
