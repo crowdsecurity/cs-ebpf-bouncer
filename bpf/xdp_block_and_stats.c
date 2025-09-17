@@ -53,8 +53,7 @@ int xdp_block_ip_and_stats(struct xdp_md *ctx) {
 
   bump_counter(&ip_stats, 0);
 
-  //__u32 key = bpf_ntohl(ip->saddr); // source IP address in host order
-  __u32 key = ip->saddr; // network order
+  __u32 key = bpf_ntohl(ip->saddr); // source IP address in host order
   __u32 *origin = bpf_map_lookup_elem(&ip_blacklist, &key);
 
   if (origin) {
