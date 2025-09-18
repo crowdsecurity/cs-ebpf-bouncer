@@ -155,11 +155,17 @@ func Execute() error {
 					}
 
 					if *decision.Scope == "Ip" {
-						if isIPv6(*decision.Value) {
+						log.Debugf("Unblocking IP %s with reason %s", *decision.Value, *decision.Origin)
+						ip, err := netip.ParseAddr(*decision.Value)
+						if err != nil {
+							log.Errorf("failed to parse IP %s: %v", *decision.Value, err)
 							continue
 						}
-						log.Debugf("Unblocking IP %s with reason %s", *decision.Value, *decision.Origin)
-						xdp.UnblockIP(*decision.Value)
+						if ip.Is4() {
+							xdp.UnblockIP4(ip)
+						} else {
+							xdp.UnblockIP6(ip)
+						}
 					}
 				}
 				for _, decision := range decisions.New {
@@ -169,9 +175,6 @@ func Execute() error {
 					}
 					if *decision.Scope == "Ip" {
 
-						if isIPv6(*decision.Value) { // Skip IPv6 for now
-							continue
-						}
 						log.Debugf("Blocking IP %s with reason %s", *decision.Value, *decision.Origin)
 						origin := ""
 						if *decision.Origin == "lists" {
@@ -181,9 +184,19 @@ func Execute() error {
 						}
 						originId := xdp.Origin.Add(origin)
 
-						if err := xdp.BlockIP(*decision.Value, originId); err != nil {
+						ip, err := netip.ParseAddr(*decision.Value)
+						if err != nil {
+							log.Errorf("failed to parse IP %s: %v", *decision.Value, err)
+							continue
+						}
+						if ip.Is4() {
+							xdp.BlockIP4(ip, originId)
+							log.Errorf("failed to block IP %s: %v", *decision.Value, err)
+						} else {
+							xdp.BlockIP6(ip, originId)
 							log.Errorf("failed to block IP %s: %v", *decision.Value, err)
 						}
+
 					}
 				}
 			}

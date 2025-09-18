@@ -12,6 +12,16 @@ import (
 	"github.com/cilium/ebpf"
 )
 
+type xdpIpOriginStats struct {
+	V4Count uint32
+	V6Count uint32
+}
+
+type xdpV6Key struct {
+	Hi uint64
+	Lo uint64
+}
+
 // loadXdp returns the embedded CollectionSpec for xdp.
 func loadXdp() (*ebpf.CollectionSpec, error) {
 	reader := bytes.NewReader(_XdpBytes)
@@ -61,14 +71,16 @@ type xdpProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type xdpMapSpecs struct {
-	IpBlacklist *ebpf.MapSpec `ebpf:"ip_blacklist"`
-	IpStats     *ebpf.MapSpec `ebpf:"ip_stats"`
+	Ip4Blacklist *ebpf.MapSpec `ebpf:"ip4_blacklist"`
+	Ip6Blacklist *ebpf.MapSpec `ebpf:"ip6_blacklist"`
+	IpStats      *ebpf.MapSpec `ebpf:"ip_stats"`
 }
 
 // xdpVariableSpecs contains global variables before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type xdpVariableSpecs struct {
+	K6 *ebpf.VariableSpec `ebpf:"k6"`
 }
 
 // xdpObjects contains all objects after they have been loaded into the kernel.
@@ -91,13 +103,15 @@ func (o *xdpObjects) Close() error {
 //
 // It can be passed to loadXdpObjects or ebpf.CollectionSpec.LoadAndAssign.
 type xdpMaps struct {
-	IpBlacklist *ebpf.Map `ebpf:"ip_blacklist"`
-	IpStats     *ebpf.Map `ebpf:"ip_stats"`
+	Ip4Blacklist *ebpf.Map `ebpf:"ip4_blacklist"`
+	Ip6Blacklist *ebpf.Map `ebpf:"ip6_blacklist"`
+	IpStats      *ebpf.Map `ebpf:"ip_stats"`
 }
 
 func (m *xdpMaps) Close() error {
 	return _XdpClose(
-		m.IpBlacklist,
+		m.Ip4Blacklist,
+		m.Ip6Blacklist,
 		m.IpStats,
 	)
 }
@@ -106,6 +120,7 @@ func (m *xdpMaps) Close() error {
 //
 // It can be passed to loadXdpObjects or ebpf.CollectionSpec.LoadAndAssign.
 type xdpVariables struct {
+	K6 *ebpf.Variable `ebpf:"k6"`
 }
 
 // xdpPrograms contains all programs after they have been loaded into the kernel.

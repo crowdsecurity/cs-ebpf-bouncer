@@ -164,48 +164,66 @@ func MetricsUpdater(met *models.RemediationComponentsMetrics, updateInterval tim
 
 func CollectMetrics() {
 	//origin 0 is always "processed"
-	processed, err := xdp.GetStatsByOrigin(0)
-	log.Debugf("Getting processed packets: %f", processed)
+	processed_v4, processed_v6, err := xdp.GetStatsByOrigin(0)
+	log.Debugf("Getting processed packets, ipv4: %f ipv6: %f", processed_v4, processed_v6)
 	if err != nil {
 		log.Errorf("error while getting stats by origin: %v", err)
 		Map[ProcessedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv4"}).Set(0)
+		Map[ProcessedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv6"}).Set(0)
 	}
 
-	Map[ProcessedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv4"}).Set(processed)
+	Map[ProcessedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv4"}).Set(processed_v4)
+	Map[ProcessedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv6"}).Set(processed_v6)
 
 	for originId := range xdp.Origin.Len() {
-		stats, err := xdp.GetStatsByOrigin(uint32(originId))
+		stats_v4, stats_v6, err := xdp.GetStatsByOrigin(uint32(originId))
 		if err != nil {
 			log.Errorf("error while getting stats by origin %d: %v", originId, err)
 			continue
 		}
-		log.Debugf("Getting dropped packets: %f for origin %d", stats, originId)
+		log.Debugf("Getting dropped packets, ipv4: %f, ipv6: %f for origin %d", stats_v4, stats_v6, originId)
 
 		originString := xdp.Origin.GetFromValue(uint32(originId))
-		log.Debugf("Getting dropped packets: %f for origin %s", stats, originString)
+		log.Debugf("Getting dropped packets, ipv4: %f, ipv6: %f for origin %s", stats_v4, stats_v6, originString)
 
-		Map[DroppedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv4", "origin": originString}).Set(float64(stats))
+		Map[DroppedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv4", "origin": originString}).Set(float64(stats_v4))
+		Map[DroppedPackets].Gauge.With(prometheus.Labels{"ip_type": "ipv6", "origin": originString}).Set(float64(stats_v6))
 	}
 
-	iter := xdp.BlacklistIterator()
+	iter4, iter6 := xdp.BlacklistIterator()
 	var (
-		key       uint32
-		value     uint32
-		bannedIPs map[string]int = make(map[string]int)
+		key        uint32
+		value      uint32
+		bannedIP4s map[string]int = make(map[string]int)
+		bannedIP6s map[string]int = make(map[string]int)
 	)
 
-	for iter.Next(&key, &value) { // iterate over the blacklist map is expensive
+	for iter4.Next(&key, &value) { // iterate over the blacklist map is expensive
 		OriginString := xdp.Origin.GetFromValue(value)
 
-		if _, ok := bannedIPs[OriginString]; !ok {
-			bannedIPs[OriginString] = 1
+		if _, ok := bannedIP4s[OriginString]; !ok {
+			bannedIP4s[OriginString] = 1
 		} else {
-			bannedIPs[OriginString]++
+			bannedIP4s[OriginString]++
 		}
 	}
 
-	for origin, count := range bannedIPs {
+	for iter6.Next(&key, &value) { // iterate over the blacklist map is expensive
+		OriginString := xdp.Origin.GetFromValue(value)
+
+		if _, ok := bannedIP6s[OriginString]; !ok {
+			bannedIP6s[OriginString] = 1
+		} else {
+			bannedIP6s[OriginString]++
+		}
+	}
+
+	for origin, count := range bannedIP4s {
 		Map[ActiveBannedIPs].Gauge.With(prometheus.Labels{"ip_type": "ipv4", "origin": origin}).Set(float64(count))
+		log.Debugf("Getting dropped packets: %d for origin %s", count, origin)
+	}
+	for origin, count := range bannedIP4s {
+		Map[ActiveBannedIPs].Gauge.With(prometheus.Labels{"ip_type": "ipv6", "origin": origin}).Set(float64(count))
 		log.Debugf("Getting dropped packets: %d for origin %s", count, origin)
 	}
 }
