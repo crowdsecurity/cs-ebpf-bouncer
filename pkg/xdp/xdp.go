@@ -23,8 +23,14 @@ var (
 
 // LoadXDP loads the embedded eBPF object, attaches it to ifaceName,
 // and returns (link handle, blacklist map, cleanup fn).
-func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, err error) {
+func LoadXDP(ifaceName string, stats bool) (cleanup func() error, err error) {
 	// Allow BPF maps > RLIMIT_MEMLOCK on older kernels :contentReference[oaicite:1]{index=1}
+
+	var (
+		lk  []*link.Link
+		ifs []net.Interface
+	)
+
 	if err = rlimit.RemoveMemlock(); err != nil {
 		err = fmt.Errorf("rlimit: %w", err)
 		return
@@ -34,24 +40,40 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, 
 	var objs xdpObjects
 	if err = loadXdpObjects(&objs, nil); err != nil {
 		err = fmt.Errorf("load objects: %w", err)
-		return nil, nil, fmt.Errorf("load objects: %w", err)
+		return nil, fmt.Errorf("load objects: %w", err)
 	}
 
 	// 2. Resolve interface index.
-	iface, err := net.InterfaceByName(ifaceName)
-	if err != nil {
-		objs.Close()
-		return nil, nil, fmt.Errorf("resolve interface: %w", err)
+	if ifaceName == "" || ifaceName == "all" {
+		ifs, err = net.Interfaces()
+		if err != nil {
+			objs.Close()
+			return nil, fmt.Errorf("list interfaces: %w", err)
+		}
+	} else {
+		var iface *net.Interface
+		iface, err = net.InterfaceByName(ifaceName)
+		if err != nil {
+			objs.Close()
+			return nil, fmt.Errorf("get interfaces %s: %w", ifaceName, err)
+		}
+		ifs = []net.Interface{*iface}
 	}
-
-	// 3. Attach XDP program.
-	lk, err = link.AttachXDP(link.XDPOptions{
-		Program:   objs.XdpBlockIpAndStats,
-		Interface: iface.Index,
-	})
-	if err != nil {
+	for _, iface := range ifs {
+		log.Infof("using interface: %s idx=%d flags=%s\n", iface.Name, iface.Index, iface.Flags)
+		l, err := link.AttachXDP(link.XDPOptions{
+			Program:   objs.XdpBlockIpAndStats,
+			Interface: iface.Index,
+		})
+		if err != nil {
+			//objs.Close()
+			continue
+		}
+		lk = append(lk, &l)
+	}
+	if len(lk) == 0 {
 		objs.Close()
-		return nil, nil, fmt.Errorf("attach XDP: %w", err)
+		return nil, fmt.Errorf("no interfaces available for XDP")
 	}
 
 	blacklist = objs.IpBlacklist
@@ -62,10 +84,12 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, 
 		info.Type, info.ValueSize, info.MaxEntries)
 
 	cleanup = func() error {
-		lk.Close()          // detaches
+		for _, l := range lk {
+			(*l).Close() // detaches
+		}
 		return objs.Close() // unpins maps/programs
 	}
-	return lk, cleanup, nil
+	return cleanup, nil
 }
 
 // For IPv4: returns 4-byte key as uint32.
