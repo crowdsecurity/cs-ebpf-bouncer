@@ -60,6 +60,9 @@ func LoadXDP(ifaceName string, stats bool) (cleanup func() error, err error) {
 		ifs = []net.Interface{*iface}
 	}
 	for _, iface := range ifs {
+		if iface.Name == "lo" {
+			continue // skip loopback
+		}
 		log.Infof("using interface: %s idx=%d flags=%s\n", iface.Name, iface.Index, iface.Flags)
 		l, err := link.AttachXDP(link.XDPOptions{
 			Program:   objs.XdpBlockIpAndStats,
@@ -67,6 +70,7 @@ func LoadXDP(ifaceName string, stats bool) (cleanup func() error, err error) {
 		})
 		if err != nil {
 			//objs.Close()
+			log.Errorf("attach XDP failed to %s idx=%d: %v\n", iface.Name, iface.Index, err)
 			continue
 		}
 		lk = append(lk, &l)
