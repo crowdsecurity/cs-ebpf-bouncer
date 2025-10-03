@@ -16,10 +16,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type ipOriginStats struct {
+	V4Count uint32
+	V6Count uint32
+}
+
 var (
-	ipStats   *ebpf.Map
-	blacklist *ebpf.Map
+	ipStats    *ebpf.Map
+	blacklist6 *ebpf.Map
+	blacklist4 *ebpf.Map
 )
+
+type v6Key struct {
+	Hi uint64
+	Lo uint64
+}
 
 // LoadXDP loads the embedded eBPF object, attaches it to ifaceName,
 // and returns (link handle, blacklist map, cleanup fn).
@@ -54,7 +65,8 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, 
 		return nil, nil, fmt.Errorf("attach XDP: %w", err)
 	}
 
-	blacklist = objs.IpBlacklist
+	blacklist6 = objs.Ip6Blacklist
+	blacklist4 = objs.Ip4Blacklist
 	ipStats = objs.IpStats
 
 	info, _ := ipStats.Info()
@@ -68,81 +80,64 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, 
 	return lk, cleanup, nil
 }
 
-// For IPv4: returns 4-byte key as uint32.
-// For IPv6: returns 16-byte key as [16]byte.
-func ipKey(addr string) (any, error) {
-	ip, err := netip.ParseAddr(addr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid IP %q: %w", addr, err)
-	}
+func ip6Key(ip netip.Addr) v6Key {
+	b := ip.AsSlice() // 16 bytes in network order
 
-	if ip.Is4() {
-		return binary.BigEndian.Uint32(ip.AsSlice()), nil
-	}
+	w0 := binary.BigEndian.Uint32(b[0:4])
+	w1 := binary.BigEndian.Uint32(b[4:8])
+	w2 := binary.BigEndian.Uint32(b[8:12])
+	w3 := binary.BigEndian.Uint32(b[12:16])
 
-	// not used for now
-	if ip.Is6() {
-		var key [16]byte
-		copy(key[:], ip.AsSlice())
-		return key, nil
+	return v6Key{
+		Hi: (uint64(w0) << 32) | uint64(w1),
+		Lo: (uint64(w2) << 32) | uint64(w3),
 	}
-
-	return nil, fmt.Errorf("unsupported IP format: %q", addr)
 }
 
-func BlockIP(ip string, origin uint32) error {
-	k, err := ipKey(ip)
-	if err != nil {
-		return err
-	}
-	return blacklist.Update(k, origin, ebpf.UpdateAny)
+func BlockIP4(ip netip.Addr, origin uint32) error {
+	k := binary.BigEndian.Uint32(ip.AsSlice())
+	return blacklist4.Update(k, origin, ebpf.UpdateAny)
+}
+
+func BlockIP6(ip netip.Addr, origin uint32) error {
+	k := ip6Key(ip)
+	return blacklist6.Update(k, origin, ebpf.UpdateAny)
 }
 
 // UnblockIP removes an address.
-func UnblockIP(ip string) error {
-	k, err := ipKey(ip)
-	if err != nil {
-		return err
-	}
-	return blacklist.Delete(k)
+func UnblockIP4(ip netip.Addr) error {
+	k := binary.BigEndian.Uint32(ip.AsSlice())
+	return blacklist4.Delete(k)
 }
 
-func BlacklistIterator() *ebpf.MapIterator {
+func UnblockIP6(ip netip.Addr) error {
+	k := ip6Key(ip)
+	return blacklist6.Delete(k)
+}
+
+func BlacklistIterator() (*ebpf.MapIterator, *ebpf.MapIterator) {
 	// Create an iterator for the blacklist map.
-	return blacklist.Iterate()
+	return blacklist4.Iterate(), blacklist6.Iterate()
 }
 
-// IsBlocked checks membership.
-func IsBlocked(m *ebpf.Map, ip string) (bool, error) {
-	k, err := ipKey(ip)
-	if err != nil {
-		return false, err
-	}
-	var v uint8
-	err = m.Lookup(k, &v)
-	if errors.Is(err, syscall.ENOENT) {
-		return false, nil
-	}
-	return err == nil, err
-}
-
-func GetStatsByOrigin(origin uint32) (float64, error) {
+func GetStatsByOrigin(origin uint32) (float64, float64, error) {
 	ncpu, err := ebpf.PossibleCPU()
 	if err != nil {
-		return 0, fmt.Errorf("get possible CPUs: %w", err)
+		return 0, 0, fmt.Errorf("get possible CPUs: %w", err)
 	}
 
-	vals := make([]uint64, ncpu)
+	vals := make([]ipOriginStats, ncpu)
 	if err := ipStats.Lookup(origin, &vals); err != nil {
 		if errors.Is(err, syscall.ENOENT) {
-			return 0, nil // origin not found
+			return 0, 0, nil // origin not found
 		}
-		return 0, fmt.Errorf("lookup origin %d: %w", origin, err)
+		return 0, 0, fmt.Errorf("lookup origin %d: %w", origin, err)
 	}
 
-	var total uint64
+	var v4, v6 uint64
 	for _, v := range vals {
-		total += v
+		v4 += uint64(v.V4Count)
+		v6 += uint64(v.V6Count)
 	}
-	return float64(total), nil
+	return float64(v4), float64(v6), nil
 }
