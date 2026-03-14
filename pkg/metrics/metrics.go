@@ -192,13 +192,14 @@ func CollectMetrics() {
 
 	iter4, iter6 := xdp.BlacklistIterator()
 	var (
-		key        uint32
+		key4       uint32
+		key6       [16]byte
 		value      uint32
 		bannedIP4s map[string]int = make(map[string]int)
 		bannedIP6s map[string]int = make(map[string]int)
 	)
 
-	for iter4.Next(&key, &value) { // iterate over the blacklist map is expensive
+	for iter4.Next(&key4, &value) { // iterate over the blacklist map is expensive
 		OriginString := xdp.Origin.GetFromValue(value)
 
 		if _, ok := bannedIP4s[OriginString]; !ok {
@@ -208,7 +209,7 @@ func CollectMetrics() {
 		}
 	}
 
-	for iter6.Next(&key, &value) { // iterate over the blacklist map is expensive
+	for iter6.Next(&key6, &value) { // iterate over the blacklist map is expensive
 		OriginString := xdp.Origin.GetFromValue(value)
 
 		if _, ok := bannedIP6s[OriginString]; !ok {
@@ -222,7 +223,7 @@ func CollectMetrics() {
 		Map[ActiveBannedIPs].Gauge.With(prometheus.Labels{"ip_type": "ipv4", "origin": origin}).Set(float64(count))
 		log.Debugf("Getting dropped packets: %d for origin %s", count, origin)
 	}
-	for origin, count := range bannedIP4s {
+	for origin, count := range bannedIP6s {
 		Map[ActiveBannedIPs].Gauge.With(prometheus.Labels{"ip_type": "ipv6", "origin": origin}).Set(float64(count))
 		log.Debugf("Getting dropped packets: %d for origin %s", count, origin)
 	}
