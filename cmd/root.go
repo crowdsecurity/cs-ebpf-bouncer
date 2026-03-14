@@ -162,9 +162,13 @@ func Execute() error {
 							continue
 						}
 						if ip.Is4() {
-							xdp.UnblockIP4(ip)
+							if err := xdp.UnblockIP4(ip); err != nil {
+								log.Errorf("failed to unblock IPv4 %s: %v", *decision.Value, err)
+							}
 						} else {
-							xdp.UnblockIP6(ip)
+							if err := xdp.UnblockIP6(ip); err != nil {
+								log.Errorf("failed to unblock IPv6 %s: %v", *decision.Value, err)
+							}
 						}
 					}
 				}
@@ -190,11 +194,13 @@ func Execute() error {
 							continue
 						}
 						if ip.Is4() {
-							xdp.BlockIP4(ip, originId)
-							log.Errorf("failed to block IP %s: %v", *decision.Value, err)
+							if err := xdp.BlockIP4(ip, originId); err != nil {
+								log.Errorf("failed to block IPv4 %s: %v", *decision.Value, err)
+							}
 						} else {
-							xdp.BlockIP6(ip, originId)
-							log.Errorf("failed to block IP %s: %v", *decision.Value, err)
+							if err := xdp.BlockIP6(ip, originId); err != nil {
+								log.Errorf("failed to block IPv6 %s: %v", *decision.Value, err)
+							}
 						}
 
 					}
@@ -214,12 +220,4 @@ func Execute() error {
 	}
 
 	return nil
-}
-
-func isIPv6(str string) bool {
-	ip, err := netip.ParseAddr(str)
-	if err != nil {
-		return false
-	}
-	return ip.Is6()
 }
