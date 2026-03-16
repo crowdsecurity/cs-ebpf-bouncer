@@ -10,7 +10,7 @@
 
 struct {
   __uint(type, BPF_MAP_TYPE_HASH);
-  __uint(max_entries, 1 << 24);
+  __uint(max_entries, 1 << 20);
   __type(key, __u32);   // IPv4 in network order
   __type(value, __u32); // dummy value
 } ip_blacklist SEC(".maps");

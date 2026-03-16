@@ -5,6 +5,7 @@ package cfg
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 
@@ -13,6 +14,7 @@ import (
 
 type BouncerConfig struct {
 	Interface      string        `yaml:"interface"`
+	XDPMode        string        `yaml:"xdp_mode"`
 	MetricsEnabled bool          `yaml:"metrics"`
 	Logging        LoggingConfig `yaml:",inline"`
 }
@@ -39,6 +41,14 @@ func NewConfig(reader io.Reader) (*BouncerConfig, error) {
 	err = yaml.Unmarshal(fcontent, &config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal: %w", err)
+	}
+
+	config.XDPMode = strings.TrimSpace(strings.ToLower(config.XDPMode))
+	if config.XDPMode == "" {
+		config.XDPMode = "generic"
+	}
+	if config.XDPMode != "generic" && config.XDPMode != "driver" {
+		return nil, fmt.Errorf("invalid xdp_mode %q: expected one of generic, driver", config.XDPMode)
 	}
 
 	if err = config.Logging.setup("crowdsec-ebpf-bouncer.log"); err != nil {

@@ -21,9 +21,19 @@ var (
 	blacklist *ebpf.Map
 )
 
+func attachFlags(mode string) (link.XDPAttachFlags, error) {
+	if mode == "generic" {
+		return link.XDPGenericMode, nil
+	}
+	if mode == "driver" {
+		return link.XDPDriverMode, nil
+	}
+	return 0, fmt.Errorf("unsupported xdp attach mode %q", mode)
+}
+
 // LoadXDP loads the embedded eBPF object, attaches it to ifaceName,
 // and returns (link handle, blacklist map, cleanup fn).
-func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, err error) {
+func LoadXDP(ifaceName string, stats bool, mode string) (lk link.Link, cleanup func() error, err error) {
 	// Allow BPF maps > RLIMIT_MEMLOCK on older kernels :contentReference[oaicite:1]{index=1}
 	if err = rlimit.RemoveMemlock(); err != nil {
 		err = fmt.Errorf("rlimit: %w", err)
@@ -44,10 +54,17 @@ func LoadXDP(ifaceName string, stats bool) (lk link.Link, cleanup func() error, 
 		return nil, nil, fmt.Errorf("resolve interface: %w", err)
 	}
 
+	flags, err := attachFlags(mode)
+	if err != nil {
+		objs.Close()
+		return nil, nil, err
+	}
+
 	// 3. Attach XDP program.
 	lk, err = link.AttachXDP(link.XDPOptions{
 		Program:   objs.XdpBlockIpAndStats,
 		Interface: iface.Index,
+		Flags:     flags,
 	})
 	if err != nil {
 		objs.Close()
